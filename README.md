@@ -1,19 +1,43 @@
-# Product: Purchase Management System
+# Purchase Request System - Lab 2
 
 ## Product
-We build a purchase request tracking system. People track purchase requests.
+We build a purchase request tracking system. People track a purchase request (`RequestId`) as it moves through statuses on its way to approval or cancellation.
 
 ## Core item
-Purchase Request (`RequestId`, `RequestStatus`, `RequestPolicy`).
+`RequestId` - a unique identifier for a purchase request.
 
-## Status table
-| From | To | Allowed |
-| --- | --- | --- |
-| DRAFT | APPROVED | Allowed |
-| APPROVED | ORDERED | Allowed |
-| DRAFT | ORDERED | Forbidden |
-| ORDERED | DRAFT | Forbidden |
+## Package diagram
 
-## Forbidden — why
-1. **DRAFT -> ORDERED:** Forbidden because a purchase request cannot be ordered without managerial approval (skipped approval).
-2. **ORDERED -> DRAFT:** Forbidden because a completed purchase cannot be reopened or moved back to draft.
+dto client handler config
+(JSON later) (HTTP later) (HTTP week 9) Application
+RequestService (@Service)
+\ \ / |
+\ \ / injects Rule
+\ \ /
+domain
+RequestId RequestStatus
+Rule + TransitionRule
++ OnlyApprovedCanCancelRule
+(no Spring)
+
+
+Arrows point inward. `domain` never imports `org.springframework`.
+
+## Statuses
+- `DRAFT`
+- `APPROVED`
+- `REJECTED`
+- `CANCELLED`
+
+## Rules (behind the `Rule` interface)
+- **TransitionRule** - forbids moving directly from `DRAFT` to `CANCELLED`.
+- **OnlyApprovedCanCancelRule** - only a request currently `APPROVED` can move to `CANCELLED`.
+
+## Run
+
+mvn spring-boot:run
+
+
+## Test
+
+mvn -q verify
