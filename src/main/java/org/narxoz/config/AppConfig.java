@@ -10,12 +10,12 @@ import org.springframework.context.annotation.Configuration;
 public class AppConfig {
 
     @Bean
-    public Rule transitionRule() {
-        return new TransitionRule();
-    }
-
-    @Bean
-    public Rule onlyApprovedCanCancelRule() {
-        return new OnlyApprovedCanCancelRule();
+    public Rule rules() {
+        Rule table = new TransitionRule();
+        Rule stopFactor = new OnlyApprovedCanCancelRule();
+        return (id, from, to) -> {
+            table.check(id, from, to);
+            stopFactor.check(id, from, to);
+        };
     }
 }

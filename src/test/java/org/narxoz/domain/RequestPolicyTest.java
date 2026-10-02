@@ -19,10 +19,13 @@ class RequestPolicyTest {
     @ParameterizedTest
     @CsvSource({
         "DRAFT, APPROVED, true",
+        "APPROVED, ORDERED, true",
         "APPROVED, CANCELLED, true",
+        "DRAFT, ORDERED, false",
         "DRAFT, CANCELLED, false",
         "REJECTED, CANCELLED, false"
     })
+    
     void testTransitions(String fromStr, String toStr, boolean isAllowed) {
         RequestStatus from = RequestStatus.valueOf(fromStr);
         RequestStatus to = RequestStatus.valueOf(toStr);
