@@ -1,0 +1,6 @@
+# Classroom local database (laptop default, not a production secret).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/css
+    username: css
+    password: css

@@ -14,18 +14,19 @@ class RequestPolicyTest {
         new TransitionRule(),
         new OnlyApprovedCanCancelRule()
     ));
-    private final RequestId validId = new RequestId("REQ-001");
+    private final RequestId validId = RequestId.newId();
 
+    // Same rows as the status table in README.md
     @ParameterizedTest
     @CsvSource({
         "DRAFT, APPROVED, true",
+        "DRAFT, REJECTED, true",
         "APPROVED, ORDERED, true",
         "APPROVED, CANCELLED, true",
         "DRAFT, ORDERED, false",
         "DRAFT, CANCELLED, false",
         "REJECTED, CANCELLED, false"
     })
-    
     void testTransitions(String fromStr, String toStr, boolean isAllowed) {
         RequestStatus from = RequestStatus.valueOf(fromStr);
         RequestStatus to = RequestStatus.valueOf(toStr);
@@ -42,5 +43,20 @@ class RequestPolicyTest {
         assertThrows(NullPointerException.class, () ->
             policy.move(null, RequestStatus.DRAFT, RequestStatus.APPROVED)
         );
+    }
+
+    @Test
+    void nullRequestIdThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new RequestId(null));
+    }
+
+    @Test
+    void blankRequestIdThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new RequestId("   "));
+    }
+
+    @Test
+    void blankBusinessKeyThrows() {
+        assertThrows(IllegalArgumentException.class, () -> new BusinessKey(" "));
     }
 }
