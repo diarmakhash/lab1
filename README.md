@@ -1,4 +1,4 @@
-# Purchase Request System - Lab 3
+# Purchase Request System - Lab 3 (JPA + Flyway)
 
 ## Product
 We build a purchase request tracking system. People track a purchase request as it moves through statuses on its way to ordering or cancellation.
@@ -14,16 +14,17 @@ We build a purchase request tracking system. People track a purchase request as 
                (HTTP later)                           RequestService (@Service, @Transactional)
        \            \                    /                |
         \            \                  /           persistence
-         \            \                /            RequestJdbc (JdbcTemplate, SQL)
+         \            \                /            RequestEntity (@Entity), RequestJpa (EntityManager)
           \            \              /                   |
                           domain
               RequestId  BusinessKey  RequestStatus  RequestPolicy
               Rule + TransitionRule + OnlyApprovedCanCancelRule
               RequestNotifier (outbound port)  DuplicateRequest
-                     (no Spring, no java.sql)
+                     (no Spring, no java.sql, no jakarta.persistence)
 ```
 
-Arrows point inward. `domain` never imports `org.springframework` or `java.sql`.
+Arrows point inward. `domain` never imports `org.springframework`, `java.sql` or `jakarta.persistence`.
+The entity is the row, not the domain: `RequestEntity` lives in `persistence` and never leaves it.
 
 ## Statuses
 - `DRAFT`
@@ -32,7 +33,7 @@ Arrows point inward. `domain` never imports `org.springframework` or `java.sql`.
 - `REJECTED`
 - `CANCELLED`
 
-The same list is the `CHECK` constraint in `src/main/resources/db/schema.sql`.
+The same list is the `CHECK` constraint in `src/main/resources/db/migration/V1__create_purchase_request.sql`.
 
 ## Status table
 | From | To | Allowed |
@@ -51,23 +52,28 @@ The same list is the `CHECK` constraint in `src/main/resources/db/schema.sql`.
 
 ## Database (Lab 3)
 
-One table, `purchase_request`, written by hand in `src/main/resources/db/schema.sql`:
+One table, `purchase_request`, written by hand in the Flyway migration
+`src/main/resources/db/migration/V1__create_purchase_request.sql`:
 surrogate `id uuid`, `business_key text NOT NULL UNIQUE`, `status text` with a `CHECK`.
 
-Start PostgreSQL (local install or Docker with only Postgres):
-
-```
-docker compose up -d
-```
+- **Flyway** runs `V1` once on startup and records it in `flyway_schema_history`.
+- **Hibernate** maps `RequestEntity` to that table with `ddl-auto: validate`: it checks the table, it never creates or changes it.
+- A new column is a new file (`V2__...sql`). `V1` is never edited after it ran.
 
 Local URL: `jdbc:postgresql://localhost:5432/css`, user `css`, password `css` (classroom default).
 
-The tests apply `schema.sql` themselves on a clean database.
+Start from an empty database (connected to `postgres`, not to `css`):
+
+```sql
+DROP DATABASE IF EXISTS css WITH (FORCE);
+CREATE DATABASE css OWNER css;
+```
+
+Then `mvn -q verify`: Flyway creates the table, the tests clean rows with `DELETE FROM`, not `DROP TABLE`.
 
 ### Rollback by hand (psql)
 
 ```sql
--- psql -h localhost -U css css -f src/main/resources/db/schema.sql
 BEGIN;
 INSERT INTO purchase_request (id, business_key, status, title)
 VALUES ('11111111-1111-1111-1111-111111111111', 'PR-19', 'DRAFT', 'Laptops');
