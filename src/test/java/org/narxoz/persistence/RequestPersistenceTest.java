@@ -12,9 +12,6 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -22,6 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Runs against the real PostgreSQL from application.yml.
+ * Flyway creates the table from V1 when the context starts; Hibernate only validates it.
  * NO @Transactional here: every count must see what was really committed.
  */
 @SpringBootTest(classes = Application.class)
@@ -31,15 +29,15 @@ class RequestPersistenceTest {
     private RequestService service;
 
     @Autowired
-    private RequestJdbc requests;
+    private RequestJpa requests;
 
     @Autowired
     private JdbcTemplate jdbc;
 
     @BeforeEach
-    void cleanDatabase() throws IOException {
-        jdbc.execute("DROP TABLE IF EXISTS purchase_request");
-        jdbc.execute(Files.readString(Path.of("src/main/resources/db/schema.sql")));
+    void empty() {
+        // Delete rows, do not drop the table: Flyway's history says V1 already ran.
+        jdbc.update("DELETE FROM purchase_request");
     }
 
     @Test
@@ -76,8 +74,17 @@ class RequestPersistenceTest {
     }
 
     @Test
+    void flywayCreatedTheTableFromV1() {
+        Integer applied = jdbc.queryForObject(
+                "SELECT count(*) FROM flyway_schema_history WHERE version = '1' AND success",
+                Integer.class);
+
+        assertEquals(1, applied);
+    }
+
+    @Test
     void unknownStatusTextFromDatabaseThrows() {
-        assertThrows(IllegalStateException.class, () -> RequestJdbc.toStatus("LOST"));
+        assertThrows(IllegalStateException.class, () -> RequestJpa.toStatus("LOST"));
     }
 
     @Test

@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.narxoz.domain.RequestId;
 import org.narxoz.domain.RequestNotifier;
 import org.narxoz.domain.RequestStatus;
-import org.narxoz.persistence.RequestJdbc;
+import org.narxoz.persistence.RequestJpa;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -17,7 +17,7 @@ class RequestServiceTest {
             new AppConfig().rules(),
             // processMove never touches the database, so no repository mock is needed
             // (a plain class mock also breaks on Java 26 with this Mockito version).
-            new RequestJdbc(null),
+            new RequestJpa(null),
             notifier);
 
     @Test
