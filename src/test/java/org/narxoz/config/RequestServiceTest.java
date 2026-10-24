@@ -15,7 +15,9 @@ class RequestServiceTest {
     private final RequestNotifier notifier = mock(RequestNotifier.class);
     private final RequestService service = new RequestService(
             new AppConfig().rules(),
-            mock(RequestJdbc.class),
+            // processMove never touches the database, so no repository mock is needed
+            // (a plain class mock also breaks on Java 26 with this Mockito version).
+            new RequestJdbc(null),
             notifier);
 
     @Test
