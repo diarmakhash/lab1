@@ -3,11 +3,14 @@ package org.narxoz.handler;
 import jakarta.servlet.http.HttpServletRequest;
 import org.narxoz.domain.DuplicateRequest;
 import org.narxoz.domain.RequestNotFound;
+import org.narxoz.domain.TransitionForbidden;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -62,6 +65,23 @@ public class ApiExceptionHandler {
     @ExceptionHandler(DuplicateRequest.class)
     ResponseEntity<ErrorResponse> duplicate(DuplicateRequest ex, HttpServletRequest request) {
         return error(HttpStatus.CONFLICT, "DUPLICATE", "business key already exists", request);
+    }
+
+    @ExceptionHandler(TransitionForbidden.class)
+    ResponseEntity<ErrorResponse> transitionForbidden(TransitionForbidden ex, HttpServletRequest request) {
+        return error(HttpStatus.CONFLICT, "TRANSITION_FORBIDDEN", ex.getMessage(), request);
+    }
+
+    /** Login: unknown user and wrong password are the same answer, so names cannot be probed. */
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<ErrorResponse> badLogin(AuthenticationException ex, HttpServletRequest request) {
+        return error(HttpStatus.UNAUTHORIZED, "UNAUTHENTICATED", "bad username or password", request);
+    }
+
+    /** @PreAuthorize fails inside the controller call, so it lands here, not in the filter. */
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<ErrorResponse> forbidden(AccessDeniedException ex, HttpServletRequest request) {
+        return error(HttpStatus.FORBIDDEN, "FORBIDDEN", SecurityErrorHandlers.NOT_ALLOWED, request);
     }
 
     @ExceptionHandler(HttpMediaTypeNotSupportedException.class)

@@ -5,6 +5,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.narxoz.config.RequestService;
@@ -12,6 +13,7 @@ import org.narxoz.domain.PurchaseRequest;
 import org.narxoz.domain.RequestId;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +32,7 @@ import java.util.UUID;
 @RestController
 @RequestMapping("/api/v1/purchase-requests")
 @Tag(name = "Purchase requests")
+@SecurityRequirement(name = "bearer")
 public class RequestController {
     private final RequestService service;
 
@@ -68,5 +71,26 @@ public class RequestController {
     })
     public RequestResponse get(@PathVariable UUID id) {
         return RequestResponse.from(service.get(new RequestId(id.toString())));
+    }
+
+    @PostMapping(path = "/{id}/approve", produces = MediaType.APPLICATION_JSON_VALUE)
+    @Operation(summary = "Approve a purchase request: DRAFT -> APPROVED (APPROVER only)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Approved; status is APPROVED",
+                    content = @Content(schema = @Schema(implementation = RequestResponse.class))),
+            @ApiResponse(responseCode = "400", description = "VALIDATION: the id is not a UUID",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "401", description = "UNAUTHENTICATED: valid token required",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "FORBIDDEN: not allowed for your role (REQUESTER)",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "NOT_FOUND: no purchase request with this id",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+            @ApiResponse(responseCode = "409", description = "TRANSITION_FORBIDDEN: the status table does not allow this move",
+                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+    })
+    public RequestResponse approve(@PathVariable UUID id, Authentication caller) {
+        // the actor is whoever the token says, not a field the caller can type
+        return RequestResponse.from(service.approve(new RequestId(id.toString()), caller.getName()));
     }
 }

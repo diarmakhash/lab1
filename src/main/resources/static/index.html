@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Purchase Request System · Sign in</title>
+    <link rel="stylesheet" href="/app.css">
+</head>
+<body>
+<header class="top">
+    <div class="wrap">
+        <div class="brand">
+            <span class="logo" aria-hidden="true">PR</span>
+            <div>
+                <h1>Purchase Request System</h1>
+                <p class="sub">Track a purchase request from DRAFT to APPROVED and ORDERED.</p>
+            </div>
+        </div>
+        <div class="roles">
+            <div class="role"><span class="chip requester">REQUESTER</span> creates and reads requests</div>
+            <div class="role"><span class="chip approver">APPROVER</span> also approves: DRAFT &rarr; APPROVED</div>
+        </div>
+    </div>
+</header>
+
+<main class="wrap grid">
+    <!-- Left: who you are -->
+    <section class="card" id="login-card">
+        <h2>Sign in</h2>
+        <form id="login-form" autocomplete="off">
+            <label>Username
+                <input id="username" name="username" required>
+            </label>
+            <label>Password
+                <input id="password" name="password" type="password" required>
+            </label>
+            <button type="submit" class="primary">Sign in</button>
+        </form>
+        <div id="login-error" class="error" hidden></div>
+
+        <div class="devusers">
+            <p class="label">Dev-only users <span class="muted">(<code>dev</code> profile, laptop only)</span></p>
+            <button type="button" class="devuser" data-user="aigerim" data-pass="requester-dev">
+                <b>aigerim</b> / requester-dev <span class="chip requester">REQUESTER</span>
+            </button>
+            <button type="button" class="devuser" data-user="daniyar" data-pass="approver-dev">
+                <b>daniyar</b> / approver-dev <span class="chip approver">APPROVER</span>
+            </button>
+        </div>
+    </section>
+
+    <section class="card" id="me-card" hidden>
+        <h2>Signed in</h2>
+        <dl class="facts">
+            <dt>User</dt><dd id="me-name"></dd>
+            <dt>Role</dt><dd id="me-role"></dd>
+            <dt>Token</dt><dd>kept in memory only, never shown <span class="muted">(Bearer)</span></dd>
+            <dt>Expires</dt><dd id="me-expires"></dd>
+        </dl>
+        <button type="button" id="logout" class="ghost">Log out</button>
+    </section>
+
+    <!-- Right: the API -->
+    <section class="card wide">
+        <h2>Purchase requests <span class="muted">/api/v1/purchase-requests</span></h2>
+
+        <form id="create-form" class="row" autocomplete="off">
+            <label>Business key
+                <input id="business-key" required>
+            </label>
+            <label class="grow">Title
+                <input id="title" maxlength="120" value="Laptops for the lab" required>
+            </label>
+            <button type="submit" class="primary">Create</button>
+        </form>
+
+        <form id="read-form" class="row" autocomplete="off">
+            <label class="grow">Request id (UUID)
+                <input id="request-id" placeholder="created id appears here">
+            </label>
+            <button type="submit">Read</button>
+            <button type="button" id="approve" class="approve">Approve</button>
+        </form>
+        <p class="hint">Approve is the locked action: only <span class="chip approver">APPROVER</span> may do it.
+            A <span class="chip requester">REQUESTER</span> gets 403 and the row stays as it was.</p>
+
+        <div id="request-card" class="request" hidden>
+            <div><span class="muted">Business key</span> <b id="rq-key"></b></div>
+            <div><span class="muted">Title</span> <span id="rq-title"></span></div>
+            <div><span class="muted">Status</span> <span id="rq-status" class="status"></span></div>
+        </div>
+    </section>
+
+    <section class="card wide">
+        <h2>Last response</h2>
+        <div id="result" class="result empty">No call yet. Sign in, or try Read without a token to see 401.</div>
+    </section>
+</main>
+
+<footer class="wrap muted small">
+    CSS-3008 · Lab 5 · The page talks to the same Spring Boot process. API docs: <a href="/swagger-ui.html">/swagger-ui.html</a>
+</footer>
+
+<script src="/app.js"></script>
+</body>
+</html>
