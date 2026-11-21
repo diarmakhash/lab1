@@ -1,0 +1,111 @@
+:root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --ink: #1d2433;
+    --muted: #6b7385;
+    --line: #e3e6ec;
+    --brand: #1f5eff;
+    --requester: #0f7b6c;
+    --approver: #8a4dff;
+    --ok: #18794e;
+    --warn: #b54708;
+    --bad: #c62828;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+.muted { color: var(--muted); font-weight: normal; }
+.small { font-size: 13px; padding-top: 8px; padding-bottom: 24px; }
+code { font-size: 0.95em; }
+
+.top { background: #10182b; color: #fff; padding: 20px 0; }
+.top .wrap { display: flex; flex-wrap: wrap; gap: 16px; justify-content: space-between; align-items: center; }
+.brand { display: flex; gap: 12px; align-items: center; }
+.logo {
+    width: 44px; height: 44px; border-radius: 10px; background: var(--brand);
+    display: grid; place-items: center; font-weight: 700;
+}
+h1 { font-size: 22px; margin: 0; }
+.sub { margin: 2px 0 0; color: #b9c2d6; font-size: 14px; }
+.roles { display: grid; gap: 6px; font-size: 14px; color: #d7dceb; }
+
+.chip {
+    display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px;
+    font-weight: 600; letter-spacing: 0.02em; color: #fff;
+}
+.chip.requester { background: var(--requester); }
+.chip.approver { background: var(--approver); }
+
+.grid { display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding-top: 20px; padding-bottom: 8px; align-items: start; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px; }
+.card.wide { grid-column: 2; }
+#login-card, #me-card { grid-row: 1 / span 2; }
+h2 { font-size: 17px; margin: 0 0 14px; }
+
+label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+input {
+    font: inherit; color: var(--ink); padding: 8px 10px; border: 1px solid var(--line);
+    border-radius: 8px; background: #fff; min-width: 0;
+}
+input:focus { outline: 2px solid var(--brand); outline-offset: -1px; }
+
+button {
+    font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid var(--line);
+    background: #fff; color: var(--ink); cursor: pointer;
+}
+button:hover { border-color: #b8c0cf; }
+button.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+button.approve { background: var(--approver); border-color: var(--approver); color: #fff; }
+button.ghost { width: 100%; }
+
+.row { display: flex; gap: 10px; align-items: end; flex-wrap: wrap; }
+.row label { margin-bottom: 0; }
+.row .grow { flex: 1 1 220px; }
+#read-form { margin-top: 12px; }
+.hint { font-size: 13px; color: var(--muted); margin: 10px 0 0; }
+
+.devusers { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 12px; }
+.devusers .label { font-size: 13px; margin: 0 0 8px; }
+.devuser {
+    display: flex; flex-wrap: wrap; align-items: center; width: 100%; justify-content: space-between;
+    gap: 4px 8px; margin-bottom: 6px; text-align: left; font-size: 14px;
+}
+.devuser .chip { flex: none; }
+.devusers .label { overflow-wrap: anywhere; }
+#request-id, .result code { overflow-wrap: anywhere; }
+.result code { word-break: break-all; }
+
+.facts { display: grid; grid-template-columns: 70px 1fr; gap: 8px 10px; margin: 0 0 16px; font-size: 14px; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; }
+
+.error {
+    margin-top: 12px; padding: 10px 12px; border-radius: 8px; font-size: 14px;
+    background: #fdecec; color: var(--bad); border: 1px solid #f5c2c2;
+}
+
+.request {
+    margin-top: 14px; padding: 12px; border-radius: 8px; border: 1px dashed var(--line);
+    display: grid; gap: 4px; font-size: 14px;
+}
+.status { font-weight: 700; }
+
+.result { font-size: 14px; display: grid; gap: 6px; }
+.result.empty { color: var(--muted); }
+.result .line { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.result .http { font-weight: 700; padding: 2px 8px; border-radius: 6px; color: #fff; }
+.http.s2 { background: var(--ok); }
+.http.s4 { background: var(--warn); }
+.http.s401, .http.s403 { background: var(--bad); }
+.http.s5 { background: #555; }
+.result code { background: #f2f4f8; padding: 1px 6px; border-radius: 4px; }
+.result .note { color: var(--muted); }
+
+@media (max-width: 760px) {
+    .grid { grid-template-columns: 1fr; }
+    .card.wide, #login-card, #me-card { grid-column: 1; grid-row: auto; }
+}

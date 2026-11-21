@@ -9,12 +9,17 @@ import org.narxoz.domain.PurchaseRequest;
 import org.narxoz.domain.RequestId;
 import org.narxoz.domain.RequestNotFound;
 import org.narxoz.domain.RequestStatus;
+import org.narxoz.security.SecurityConfig;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.endsWith;
@@ -23,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -32,9 +38,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 /**
  * Web slice: only the controller and the advice. The service is a mock,
  * no PostgreSQL, no real HTTP server. Locks 201, 400, 404, 409 and the correlation header.
+ * Lab 5: the real filter chain runs; every call carries a REQUESTER token from jwt().
  */
 @WebMvcTest(RequestController.class)
 @ContextConfiguration(classes = Application.class) // Application lives in config, not in a parent package
+@Import({SecurityConfig.class, SecurityErrorHandlers.class})
 class RequestControllerTest {
     private static final String URL = "/api/v1/purchase-requests";
 
@@ -43,6 +51,14 @@ class RequestControllerTest {
 
     @MockitoBean
     private RequestService service;
+
+    @MockitoBean
+    private JwtDecoder jwtDecoder; // jwt() below skips decoding; the chain still needs the bean
+
+    private static RequestPostProcessor requester() {
+        return jwt().jwt(token -> token.subject("aigerim"))
+                .authorities(new SimpleGrantedAuthority("ROLE_" + SecurityConfig.REQUESTER));
+    }
 
     private static String body(String businessKey, String title) {
         return """
@@ -60,7 +76,7 @@ class RequestControllerTest {
         when(service.register(any(), eq("PR-19"), eq("Laptops")))
                 .thenReturn(stored(id, "PR-19", "Laptops"));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "Laptops")))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "Laptops")))
                 .andExpect(status().isCreated())
                 .andExpect(header().string("Location", endsWith(URL + "/" + id.value())))
                 .andExpect(jsonPath("$.id").value(id.value()))
@@ -75,14 +91,14 @@ class RequestControllerTest {
         RequestId id = RequestId.newId();
         when(service.register(any(), eq("PR-20"), eq(title))).thenReturn(stored(id, "PR-20", title));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-20", title)))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-20", title)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.title").value(title));
     }
 
     @Test
     void blankTitleIs400AndServiceIsNotCalled() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "")))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("title must not be blank"))
@@ -93,7 +109,7 @@ class RequestControllerTest {
 
     @Test
     void titleOfOnlySpacesIs400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "   ")))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "   ")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("title must not be blank"));
 
@@ -102,7 +118,7 @@ class RequestControllerTest {
 
     @Test
     void blankBusinessKeyIs400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("", "Laptops")))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("", "Laptops")))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("business key must not be blank"));
@@ -112,7 +128,7 @@ class RequestControllerTest {
 
     @Test
     void titleOf121CharactersIs400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "a".repeat(121))))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "a".repeat(121))))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message", containsString("title")))
                 .andExpect(jsonPath("$.message", containsString("size must be between 0 and 120")));
@@ -122,7 +138,7 @@ class RequestControllerTest {
 
     @Test
     void bodyThatIsNotJsonIs400() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content("{not json"))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content("{not json"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("body must be JSON"));
@@ -130,7 +146,7 @@ class RequestControllerTest {
 
     @Test
     void wrongContentTypeIs415() throws Exception {
-        mvc.perform(post(URL).contentType(MediaType.TEXT_PLAIN).content("PR-19"))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.TEXT_PLAIN).content("PR-19"))
                 .andExpect(status().isUnsupportedMediaType())
                 .andExpect(jsonPath("$.code").value("UNSUPPORTED"));
     }
@@ -139,7 +155,7 @@ class RequestControllerTest {
     void duplicateBusinessKeyIs409() throws Exception {
         when(service.register(any(), eq("PR-19"), anyString())).thenThrow(new DuplicateRequest("PR-19"));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "Again")))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-19", "Again")))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DUPLICATE"))
                 .andExpect(jsonPath("$.correlationId").isNotEmpty());
@@ -150,7 +166,7 @@ class RequestControllerTest {
         RequestId id = RequestId.newId();
         when(service.get(id)).thenReturn(stored(id, "PR-19", "Laptops"));
 
-        mvc.perform(get(URL + "/" + id.value()))
+        mvc.perform(get(URL + "/" + id.value()).with(requester()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.businessKey").value("PR-19"))
                 .andExpect(jsonPath("$.status").value("DRAFT"));
@@ -161,14 +177,14 @@ class RequestControllerTest {
         RequestId id = RequestId.newId();
         when(service.get(id)).thenThrow(new RequestNotFound(id));
 
-        mvc.perform(get(URL + "/" + id.value()))
+        mvc.perform(get(URL + "/" + id.value()).with(requester()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     @Test
     void businessKeyInThePathIs400() throws Exception {
-        mvc.perform(get(URL + "/PR-19"))
+        mvc.perform(get(URL + "/PR-19").with(requester()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.code").value("VALIDATION"))
                 .andExpect(jsonPath("$.message").value("id must be a UUID"));
@@ -178,7 +194,7 @@ class RequestControllerTest {
 
     @Test
     void correlationIdFromTheCallerComesBack() throws Exception {
-        mvc.perform(post(URL)
+        mvc.perform(post(URL).with(requester())
                         .header("X-Correlation-Id", "test-123")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("PR-19", "")))
@@ -191,7 +207,7 @@ class RequestControllerTest {
     void errorBodyHasNoStackTraceOrClassName() throws Exception {
         when(service.register(any(), anyString(), anyString())).thenThrow(new IllegalStateException("db password is css"));
 
-        mvc.perform(post(URL).contentType(MediaType.APPLICATION_JSON).content(body("PR-30", "Laptops")))
+        mvc.perform(post(URL).with(requester()).contentType(MediaType.APPLICATION_JSON).content(body("PR-30", "Laptops")))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL"))
                 .andExpect(jsonPath("$.message").value("unexpected error"))

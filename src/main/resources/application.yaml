@@ -39,5 +39,11 @@ info:
     name: Purchase Request System
     description: Tracks purchase requests from DRAFT to ORDERED
 
+# Lab 5: every token says iss=purchases; the decoder rejects any other issuer.
+# The signing secret is NOT here: dev and prod set app.jwt.secret.
+app:
+  jwt:
+    issuer: purchases
+
 springdoc:
   override-with-generic-response: false   # the spec lists only the statuses we declared

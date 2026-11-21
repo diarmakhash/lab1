@@ -42,6 +42,17 @@ public class RequestJpa {
                 row.getTitle()));
     }
 
+    /** The status change itself: one UPDATE of one row. The row is never deleted. */
+    public void updateStatus(UUID id, RequestStatus status) {
+        em.createQuery("""
+                update RequestEntity r set r.status = :status
+                where r.id = :id
+                """)
+                .setParameter("status", toText(status))
+                .setParameter("id", id)
+                .executeUpdate();
+    }
+
     public int count(String businessKey) {
         Long n = em.createQuery("""
                 select count(r) from RequestEntity r

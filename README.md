@@ -1,4 +1,4 @@
-# Purchase Request System - Lab 4 (REST contract + Spring Boot platform)
+# Purchase Request System - Lab 5 (Spring Security + JWT + auth page)
 
 ## Product
 We build a purchase request tracking system. People track a purchase request as it moves through statuses on its way to ordering or cancellation.
@@ -9,18 +9,19 @@ We build a purchase request tracking system. People track a purchase request as 
 ## Package diagram
 
 ```
-  dto          client                      handler                         config
-  (unused)     LoggingRequestNotifier      RequestController (/api/v1)     Application, AppConfig
-               DownstreamProperties        CreateRequestBody, RequestResponse,  RequestService
-               (app.downstream from yaml)  ErrorResponse, ApiExceptionHandler   (@Service, @Transactional)
-       \            \                        /                                 |
-        \            \                      /                            persistence
-         \            \                    /                             RequestEntity, RequestJpa
-          \            \                  /                                    |
-                                   domain
+  security                     client                      handler                         config
+  SecurityConfig (chain,       LoggingRequestNotifier      RequestController (/api/v1)     Application, AppConfig
+   JWT beans, dev users)       DownstreamProperties        AuthController, MeController    RequestService
+  TokenService (issues JWT)    (app.downstream from yaml)  CreateRequestBody, LoginRequest  (@Service, @Transactional,
+  JwtProperties (app.jwt)                                  RequestResponse, TokenResponse    @PreAuthorize on approve)
+       \                             \                     ErrorResponse, ApiExceptionHandler      |
+        \                             \                    SecurityErrorHandlers (401/403)   persistence
+         \                             \                        /                      RequestEntity, RequestJpa
+          \                             \                      /                               |
+                                             domain
               RequestId  BusinessKey  RequestStatus  RequestPolicy  PurchaseRequest
               Rule + TransitionRule + OnlyApprovedCanCancelRule
-              RequestNotifier (outbound port)  DuplicateRequest  RequestNotFound
+              RequestNotifier (outbound port)  DuplicateRequest  RequestNotFound  TransitionForbidden
               (no Spring, no ResponseEntity, no jakarta.validation, no jakarta.persistence)
 ```
 
@@ -52,12 +53,94 @@ The same list is the `CHECK` constraint in `src/main/resources/db/migration/V1__
 - **TransitionRule** - implements the status table: only the listed transitions are allowed.
 - **OnlyApprovedCanCancelRule** - stop-factor: only a request currently `APPROVED` can move to `CANCELLED`.
 
+## Security (Lab 5)
+
+Two roles. The locked action is **approve** (`DRAFT -> APPROVED`), the expensive move from the status table.
+
+- **REQUESTER** (junior) creates and reads purchase requests.
+- **APPROVER** (senior) does the same and may also approve.
+
+### Rules table
+
+The filter chain in `SecurityConfig` is this table, top to bottom. The first match wins, so the narrow approve rule sits above `/api/v1/**`.
+
+| Action | REQUESTER | APPROVER | No token |
+| --- | --- | --- | --- |
+| `POST /api/v1/auth/login` | anyone | anyone | allowed |
+| `GET /actuator/health`, `GET /actuator/info` | anyone | anyone | allowed |
+| Auth page: `/`, `/index.html`, `/app.css`, `/app.js` | anyone | anyone | allowed |
+| springdoc: `/swagger-ui.html`, `/swagger-ui/**`, `/v3/api-docs/**` | anyone | anyone | allowed |
+| Approve: `POST /api/v1/purchase-requests/{id}/approve` | **403** | yes (200) | 401 |
+| `GET /api/me` | yes | yes | 401 |
+| Create and read: `POST /api/v1/purchase-requests`, `GET /api/v1/purchase-requests/{id}` | yes | yes | 401 |
+| Anything else (also `/actuator/env`, `heapdump`, `beans`) | 403 | 403 | 401 |
+
+`RequestService.approve` also carries `@PreAuthorize("hasRole('APPROVER')")`: the same role as the URL rule. A REQUESTER never reaches the service, and the row stays `DRAFT`. The actor in the log is `Authentication.getName()` (the token's `sub`), never a JSON field.
+
+### Login and the token
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"daniyar","password":"approver-dev"}'
+# 200 {"accessToken":"eyJ...","tokenType":"Bearer","expiresIn":900}
+
+curl -i -X POST http://localhost:8080/api/v1/purchase-requests/<uuid>/approve \
+  -H "Authorization: Bearer <accessToken>"
+```
+
+- HS256, `iss: purchases`, `sub`, `iat`, `exp` (15 minutes), and `roles` without the `ROLE_` prefix (`["APPROVER"]`). No password and no personal data in the token.
+- The decoder checks the signature, the expiry and the issuer. A token from another issuer (`helpdesk`) is 401.
+- The `roles` claim becomes `ROLE_<role>` for `hasRole(...)`.
+
+| Failure | Status | `code` | `message` |
+| --- | --- | --- | --- |
+| Unknown user, or wrong password | 401 | `UNAUTHENTICATED` | `bad username or password` |
+| Blank username or password | 400 | `VALIDATION` | `username must not be blank` |
+| No token, bad format, bad signature, expired, wrong issuer | 401 | `UNAUTHENTICATED` | `valid token required` |
+| Role not allowed | 403 | `FORBIDDEN` | `not allowed for your role` |
+| Approve a request that is not `DRAFT` | 409 | `TRANSITION_FORBIDDEN` | `purchase request cannot move from APPROVED to APPROVED` |
+
+401 and 403 come from the filters, so `SecurityErrorHandlers` writes the same `code`, `message`, `correlationId` body as the advice. CSRF is off, sessions are `STATELESS`, and there is no form login or HTTP Basic: the only credential is `Authorization: Bearer`.
+
+### Dev users and the secret
+
+| Username | Password | Role |
+| --- | --- | --- |
+| `aigerim` | `requester-dev` | REQUESTER |
+| `daniyar` | `approver-dev` | APPROVER |
+
+These users exist only on the `dev` profile (`InMemoryUserDetailsManager`), stored as BCrypt hashes via `PasswordEncoderFactories.createDelegatingPasswordEncoder()`. There is no `{noop}` and no user table. Prod ships no users.
+
+| Profile | `app.jwt.secret` |
+| --- | --- |
+| `application.yaml` | none (only `app.jwt.issuer: purchases`) |
+| `application-dev.yaml` | classroom value, 32+ characters |
+| `application-prod.yaml` | `${CSS_JWT_SECRET}`, no default |
+
+A secret shorter than 32 characters fails at startup (`JwtProperties`). `src/main/java` has no secret literal.
+
+### The auth page
+
+`http://localhost:8080/` is our own page: `src/main/resources/static/index.html`, `app.css` and `app.js`, plain HTML and JS with no library. It is served by the same Spring Boot process, so no CORS bean is needed.
+
+1. Shows the product, the two roles and the two dev users (labelled dev-only).
+2. Signs in with `POST /api/v1/auth/login`. A wrong password shows `401 UNAUTHENTICATED bad username or password`.
+3. Keeps `accessToken` only in a JavaScript variable: not in `localStorage`, not in the URL, not on the page. It shows the user and role from `GET /api/me` and a 15-minute countdown.
+4. Create and Read call the API with `Authorization: Bearer` and show the HTTP status and the status token.
+5. Approve as `aigerim` shows **403 FORBIDDEN**, then re-reads the row: "status is still DRAFT". Approve as `daniyar` shows **200** and `APPROVED`.
+6. Log out drops the variable. The next Read shows **401** `valid token required`.
+7. Every call sends `X-Correlation-Id`. Errors show `code`, `message` and `correlationId`.
+
 ## REST API (Lab 4)
 
 | Call | Success | Failures |
 | --- | --- | --- |
 | `POST /api/v1/purchase-requests` | **201** + `Location: /api/v1/purchase-requests/{id}` | 400 `VALIDATION`, 409 `DUPLICATE`, 415 `UNSUPPORTED` |
 | `GET /api/v1/purchase-requests/{id}` | **200** | 400 `VALIDATION` (`id must be a UUID`), 404 `NOT_FOUND` |
+| `POST /api/v1/purchase-requests/{id}/approve` (Lab 5) | **200** `APPROVED` | 401, 403, 404, 409 `TRANSITION_FORBIDDEN` |
+
+Since Lab 5 every call here needs `Authorization: Bearer <token>`; without it the answer is 401.
 
 The path id is the UUID. The business key (`PR-19`) stays in the body.
 
@@ -87,7 +170,7 @@ Production: `SPRING_PROFILES_ACTIVE=prod` plus the env vars.
 
 ## Actuator
 
-Only `health` and `info` are exposed. `GET /actuator/health` is 200 `UP` without details; `env`, `beans`, `heapdump`, `shutdown` are 404.
+Only `health` and `info` are exposed. `GET /actuator/health` is 200 `UP` without details. `env`, `beans`, `heapdump` and `shutdown` are not exposed (404 in Lab 4). Since Lab 5 the chain denies them first: 401 with no token, 403 with any token.
 
 ## Database (Lab 3)
 

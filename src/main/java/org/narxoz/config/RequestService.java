@@ -8,8 +8,12 @@ import org.narxoz.domain.RequestNotFound;
 import org.narxoz.domain.RequestNotifier;
 import org.narxoz.domain.RequestStatus;
 import org.narxoz.domain.Rule;
+import org.narxoz.domain.TransitionForbidden;
 import org.narxoz.persistence.RequestJpa;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +21,8 @@ import java.util.UUID;
 
 @Service
 public class RequestService {
+    private static final Logger log = LoggerFactory.getLogger(RequestService.class);
+
     private final Rule rules;
     private final RequestJpa requests;
     private final RequestNotifier notifier;
@@ -54,6 +60,27 @@ public class RequestService {
     public PurchaseRequest get(RequestId id) {
         return requests.findById(id.uuid())
                 .orElseThrow(() -> new RequestNotFound(id));
+    }
+
+    /**
+     * Lab 5: the locked move DRAFT -> APPROVED. The URL rule already lets only APPROVER in;
+     * @PreAuthorize is the second lock, so another controller cannot forget the role.
+     * The actor comes from the token (Authentication.getName()), never from a JSON field.
+     */
+    @PreAuthorize("hasRole('APPROVER')")
+    @Transactional
+    public PurchaseRequest approve(RequestId id, String actor) {
+        PurchaseRequest current = requests.findById(id.uuid())
+                .orElseThrow(() -> new RequestNotFound(id));
+        try {
+            rules.check(id, current.status(), RequestStatus.APPROVED);
+        } catch (IllegalStateException ex) {
+            throw new TransitionForbidden(current.status(), RequestStatus.APPROVED); // the row does not change
+        }
+        requests.updateStatus(id.uuid(), RequestStatus.APPROVED);
+        notifier.statusChanged(id, RequestStatus.APPROVED);
+        log.info("purchase request {} approved by {}", id.value(), actor); // the name, never the token
+        return new PurchaseRequest(id, current.businessKey(), RequestStatus.APPROVED, current.title());
     }
 
     /**
