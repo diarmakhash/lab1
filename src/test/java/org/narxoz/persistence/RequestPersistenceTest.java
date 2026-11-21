@@ -18,7 +18,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Runs against the real PostgreSQL from the dev profile (application-dev.yaml).
+ * Runs against the real PostgreSQL from application.yml.
  * Flyway creates the table from V1 when the context starts; Hibernate only validates it.
  * NO @Transactional here: every count must see what was really committed.
  */
