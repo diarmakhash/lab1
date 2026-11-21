@@ -1,0 +1,43 @@
+# Shared by every profile. No password here: dev and prod set the datasource.
+spring:
+  application:
+    name: purchase-requests
+  profiles:
+    default: dev            # a plain local boot uses the laptop database
+  jpa:
+    hibernate:
+      ddl-auto: validate    # Hibernate only checks the table. Flyway owns the schema.
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+    out-of-order: false
+
+# Boot's default error page must not leak internals
+server:
+  error:
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+    include-exception: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info   # env, beans, heapdump, shutdown stay hidden
+  endpoint:
+    health:
+      show-details: never      # health does not list datasource details
+  info:
+    env:
+      enabled: true
+
+info:
+  app:
+    name: Purchase Request System
+    description: Tracks purchase requests from DRAFT to ORDERED
+
+springdoc:
+  override-with-generic-response: false   # the spec lists only the statuses we declared

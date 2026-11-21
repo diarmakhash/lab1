@@ -1,0 +1,13 @@
+# Laptop profile (default). Classroom database from Lab 3; not a production secret.
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/css
+    username: css
+    password: css
+  jpa:
+    show-sql: true
+
+app:
+  downstream:
+    base-url: http://localhost:9090
+    timeout: 2s

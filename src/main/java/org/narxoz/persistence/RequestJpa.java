@@ -1,6 +1,9 @@
 package org.narxoz.persistence;
 
 import jakarta.persistence.EntityManager;
+import org.narxoz.domain.BusinessKey;
+import org.narxoz.domain.PurchaseRequest;
+import org.narxoz.domain.RequestId;
 import org.narxoz.domain.RequestStatus;
 import org.springframework.stereotype.Repository;
 
@@ -24,6 +27,19 @@ public class RequestJpa {
     public void insert(UUID id, String businessKey, RequestStatus status, String title) {
         em.persist(new RequestEntity(id, businessKey, toText(status), title));
         em.flush(); // without flush the UNIQUE error would appear only at commit
+    }
+
+    /** Read by the surrogate id. Maps the row to a domain record; the entity stays here. */
+    public Optional<PurchaseRequest> findById(UUID id) {
+        RequestEntity row = em.find(RequestEntity.class, id);
+        if (row == null) {
+            return Optional.empty();
+        }
+        return Optional.of(new PurchaseRequest(
+                new RequestId(row.getId().toString()),
+                new BusinessKey(row.getBusinessKey()),
+                toStatus(row.getStatus()),
+                row.getTitle()));
     }
 
     public int count(String businessKey) {

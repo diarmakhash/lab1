@@ -1,4 +1,4 @@
-# Purchase Request System - Lab 3 (JPA + Flyway)
+# Purchase Request System - Lab 4 (REST contract + Spring Boot platform)
 
 ## Product
 We build a purchase request tracking system. People track a purchase request as it moves through statuses on its way to ordering or cancellation.
@@ -9,21 +9,23 @@ We build a purchase request tracking system. People track a purchase request as 
 ## Package diagram
 
 ```
-  dto          client                 handler         config
-  (JSON later) LoggingRequestNotifier (HTTP week 9)   Application, AppConfig
-               (HTTP later)                           RequestService (@Service, @Transactional)
-       \            \                    /                |
-        \            \                  /           persistence
-         \            \                /            RequestEntity (@Entity), RequestJpa (EntityManager)
-          \            \              /                   |
-                          domain
-              RequestId  BusinessKey  RequestStatus  RequestPolicy
+  dto          client                      handler                         config
+  (unused)     LoggingRequestNotifier      RequestController (/api/v1)     Application, AppConfig
+               DownstreamProperties        CreateRequestBody, RequestResponse,  RequestService
+               (app.downstream from yaml)  ErrorResponse, ApiExceptionHandler   (@Service, @Transactional)
+       \            \                        /                                 |
+        \            \                      /                            persistence
+         \            \                    /                             RequestEntity, RequestJpa
+          \            \                  /                                    |
+                                   domain
+              RequestId  BusinessKey  RequestStatus  RequestPolicy  PurchaseRequest
               Rule + TransitionRule + OnlyApprovedCanCancelRule
-              RequestNotifier (outbound port)  DuplicateRequest
-                     (no Spring, no java.sql, no jakarta.persistence)
+              RequestNotifier (outbound port)  DuplicateRequest  RequestNotFound
+              (no Spring, no ResponseEntity, no jakarta.validation, no jakarta.persistence)
 ```
 
-Arrows point inward. `domain` never imports `org.springframework`, `java.sql` or `jakarta.persistence`.
+Arrows point inward. `domain` never imports `org.springframework`, `java.sql`, `jakarta.persistence` or `jakarta.validation`.
+HTTP is an adapter in `handler`: the controller picks the status code, the service does the work, Jackson never sees the entity.
 The entity is the row, not the domain: `RequestEntity` lives in `persistence` and never leaves it.
 
 ## Statuses
@@ -49,6 +51,43 @@ The same list is the `CHECK` constraint in `src/main/resources/db/migration/V1__
 ## Rules (behind the `Rule` interface)
 - **TransitionRule** - implements the status table: only the listed transitions are allowed.
 - **OnlyApprovedCanCancelRule** - stop-factor: only a request currently `APPROVED` can move to `CANCELLED`.
+
+## REST API (Lab 4)
+
+| Call | Success | Failures |
+| --- | --- | --- |
+| `POST /api/v1/purchase-requests` | **201** + `Location: /api/v1/purchase-requests/{id}` | 400 `VALIDATION`, 409 `DUPLICATE`, 415 `UNSUPPORTED` |
+| `GET /api/v1/purchase-requests/{id}` | **200** | 400 `VALIDATION` (`id must be a UUID`), 404 `NOT_FOUND` |
+
+The path id is the UUID. The business key (`PR-19`) stays in the body.
+
+```bash
+curl -i -X POST http://localhost:8080/api/v1/purchase-requests \
+  -H 'Content-Type: application/json' \
+  -d '{"businessKey":"PR-19","title":"Laptops for the lab"}'
+```
+
+Every failure body is only `code`, `message`, `correlationId`. If the caller sends `X-Correlation-Id`, the body repeats it; otherwise a new one is minted. No stack trace, no exception class, no entity on the wire.
+
+A second POST of the same business key is **409** and the row count for that key stays **1** (the Lab 3 duplicate, now visible to the caller).
+
+OpenAPI: `/swagger-ui.html` (UI) and `/v3/api-docs` (spec).
+
+## Configuration and profiles
+
+| File | Holds |
+| --- | --- |
+| `application.yaml` | shared: `ddl-auto: validate`, Flyway, error-leak settings, actuator exposure. No password. `spring.profiles.default: dev` |
+| `application-dev.yaml` | laptop: PostgreSQL `localhost:5432/css`, `css`/`css`; `app.downstream.base-url: http://localhost:9090`, `timeout: 2s` |
+| `application-prod.yaml` | env vars only: `CSS_DB_URL`, `CSS_DB_USER`, `CSS_DB_PASSWORD`, `CSS_DOWNSTREAM_URL` |
+
+`app.downstream` is bound by `@ConfigurationProperties` (`DownstreamProperties`) and injected into the outbound adapter. No network call yet (Lab 6). Java has no URL literals.
+
+Production: `SPRING_PROFILES_ACTIVE=prod` plus the env vars.
+
+## Actuator
+
+Only `health` and `info` are exposed. `GET /actuator/health` is 200 `UP` without details; `env`, `beans`, `heapdump`, `shutdown` are 404.
 
 ## Database (Lab 3)
 
