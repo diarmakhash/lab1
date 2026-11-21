@@ -2,7 +2,9 @@ package org.narxoz.config;
 
 import org.narxoz.domain.BusinessKey;
 import org.narxoz.domain.DuplicateRequest;
+import org.narxoz.domain.PurchaseRequest;
 import org.narxoz.domain.RequestId;
+import org.narxoz.domain.RequestNotFound;
 import org.narxoz.domain.RequestNotifier;
 import org.narxoz.domain.RequestStatus;
 import org.narxoz.domain.Rule;
@@ -33,7 +35,7 @@ public class RequestService {
 
     /** One transaction per call: a new purchase request starts as DRAFT. */
     @Transactional
-    public void register(RequestId id, String businessKey, String title) {
+    public PurchaseRequest register(RequestId id, String businessKey, String title) {
         BusinessKey key = new BusinessKey(businessKey);
         if (title == null || title.isBlank()) {
             throw new IllegalArgumentException("Title не может быть пустым");
@@ -44,6 +46,14 @@ public class RequestService {
             // SQLState 23505. Rethrow as a domain error, never swallow.
             throw new DuplicateRequest(key.value());
         }
+        return new PurchaseRequest(id, key, RequestStatus.DRAFT, title);
+    }
+
+    /** Read only: no register, no move, no flush. A missing row is RequestNotFound. */
+    @Transactional(readOnly = true)
+    public PurchaseRequest get(RequestId id) {
+        return requests.findById(id.uuid())
+                .orElseThrow(() -> new RequestNotFound(id));
     }
 
     /**

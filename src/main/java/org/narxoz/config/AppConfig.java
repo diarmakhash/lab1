@@ -1,12 +1,15 @@
 package org.narxoz.config;
 
+import org.narxoz.client.DownstreamProperties;
 import org.narxoz.domain.OnlyApprovedCanCancelRule;
 import org.narxoz.domain.Rule;
 import org.narxoz.domain.TransitionRule;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
+@EnableConfigurationProperties(DownstreamProperties.class) // app.downstream.* from yaml
 public class AppConfig {
 
     @Bean
